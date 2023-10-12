@@ -29,11 +29,19 @@ def receive_messages():
         if message['type'] == "message":
             print(f"\n{message['payload']['room']}/{message['payload']['name']}:{message['payload']['text']}")
 
-        elif message['type'] == "image":
+        elif message['type'] == "size":
+            # Received an image/file from the client
+            filesize = message["fsize"]
+
+            message = client_socket.recv(int(filesize) * 2).decode('utf-8')
+            
+            message = message.replace("'", '"')
+            
+            message = json.loads(message)
+            
             filename = message["payload"]["filename"]
             filedata = message["payload"]["filedata"]
 
-            # Save the received file
             with open(message['payload']['name'] + filename, "wb") as file:
                 file.write(base64.b64decode(filedata))
                 
@@ -80,6 +88,9 @@ while True:
         data = file.read()
         file.close()
         print("Client", data, base64.b64encode(data).decode('ascii'))
+
+        client_socket.send(str({"type":"size",
+                                "fsize":file_size}).encode('utf-8'))
 
         json_sent = {
             "type": "image",

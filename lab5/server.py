@@ -43,10 +43,20 @@ def handle_client(client_socket, client_address, client_id):
                         if clients[c]["room"] == message["payload"]["room"]:
                             if sk != client_socket:
                                 sk.send(str(message).encode('utf-8'))
-        elif message['type'] == "image":
+        elif message['type'] == "size":
             # Received an image/file from the client
+            filesize = message["fsize"]
+
+            message = client_socket.recv(int(filesize) * 2).decode('utf-8')
+            
+            print(f"Received from {client_address}: {message}")
+            message = message.replace("'", '"')
+            
+            message = json.loads(message)
+            
             filename = message["payload"]["filename"]
             filedata = message["payload"]["filedata"]
+
 
             with open("server_" + filename, "wb") as file:
                 file.write(base64.b64decode(filedata))
@@ -57,6 +67,8 @@ def handle_client(client_socket, client_address, client_id):
                     if clients[c]["socket"] == sk:
                         if clients[c]["room"] == message["payload"]["room"]:
                             if sk != client_socket:
+                                sk.send(str({"type":"size",
+                                "fsize":filesize}).encode('utf-8'))
                                 sk.send(str(message).encode('utf-8'))
     sockets.remove(client_socket)
     del clients[client_id]
