@@ -29,22 +29,27 @@ def receive_messages():
         if message['type'] == "message":
             print(f"\n{message['payload']['room']}/{message['payload']['name']}:{message['payload']['text']}")
 
-        elif message['type'] == "size":
+        elif message['type'] == "image":
             # Received an image/file from the client
-            filesize = message["fsize"]
+            filesize = message["filesize"]
+            filedata = b""
+            total_received = 0
 
-            message = client_socket.recv(int(filesize) * 2).decode('utf-8')
+            while total_received < filesize:
+                chunk = client_socket.recv(1024)
+                if not chunk:
+                    break
+                filedata += chunk
+                total_received += len(chunk)
             
+            message = client_socket.recv(1024).decode('utf-8')
             message = message.replace("'", '"')
-            
             message = json.loads(message)
             
             filename = message["payload"]["filename"]
-            filedata = message["payload"]["filedata"]
 
-            with open(message['payload']['name'] + filename, "wb") as file:
-                file.write(base64.b64decode(filedata))
-                
+            with open("client_" + filename, "wb") as file:
+                file.write(filedata)
             print(f"\n{message['payload']['room']}/{message['payload']['name']} sent a file: {filename}")
 
 def get_general_info():
@@ -87,19 +92,25 @@ while True:
         file_size = os.path.getsize(message)
         data = file.read()
         file.close()
-        print("Client", data, base64.b64encode(data).decode('ascii'))
+        print("Client", data)
+        client_socket.send(str({"type":"image",
+                                "filesize":file_size}).encode('utf-8'))
 
-        client_socket.send(str({"type":"size",
-                                "fsize":file_size}).encode('utf-8'))
+
+        # Then, send the image data in chunks
+        chunk_size = 1024
+        total_sent = 0
+        while total_sent < file_size:
+            chunk = data[total_sent:total_sent + chunk_size]
+            client_socket.send(chunk)
+            total_sent += len(chunk)
 
         json_sent = {
             "type": "image",
-            "payload":{
-                "filename":message,
-                "filesize":file_size,
-                "filedata":base64.b64encode(data).decode('ascii'),
-                "room":gen_info["room"],
-                "name":gen_info["name"],
+            "payload": {
+                "filename": message,
+                "room": gen_info["room"],
+                "name": gen_info["name"],
             }
         }
     else:

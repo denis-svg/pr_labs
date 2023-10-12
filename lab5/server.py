@@ -43,23 +43,27 @@ def handle_client(client_socket, client_address, client_id):
                         if clients[c]["room"] == message["payload"]["room"]:
                             if sk != client_socket:
                                 sk.send(str(message).encode('utf-8'))
-        elif message['type'] == "size":
+        elif message['type'] == "image":
             # Received an image/file from the client
-            filesize = message["fsize"]
+            filesize = message["filesize"]
+            filedata = b""
+            total_received = 0
 
-            message = client_socket.recv(int(filesize) * 2).decode('utf-8')
+            while total_received < filesize:
+                chunk = client_socket.recv(1024)
+                if not chunk:
+                    break
+                filedata += chunk
+                total_received += len(chunk)
             
-            print(f"Received from {client_address}: {message}")
+            message = client_socket.recv(1024).decode('utf-8')
             message = message.replace("'", '"')
-            
             message = json.loads(message)
             
             filename = message["payload"]["filename"]
-            filedata = message["payload"]["filedata"]
-
 
             with open("server_" + filename, "wb") as file:
-                file.write(base64.b64decode(filedata))
+                file.write(filedata)
 
             # Broadcast the file to clients in the same room
             for sk in sockets:
@@ -67,8 +71,14 @@ def handle_client(client_socket, client_address, client_id):
                     if clients[c]["socket"] == sk:
                         if clients[c]["room"] == message["payload"]["room"]:
                             if sk != client_socket:
-                                sk.send(str({"type":"size",
-                                "fsize":filesize}).encode('utf-8'))
+                                sk.send(str({"type":"image",
+                                "filesize":filesize}).encode('utf-8'))
+                                chunk_size = 1024
+                                total_sent = 0
+                                while total_sent < filesize:
+                                    chunk = filedata[total_sent:total_sent + chunk_size]
+                                    sk.send(chunk)
+                                    total_sent += len(chunk)
                                 sk.send(str(message).encode('utf-8'))
     sockets.remove(client_socket)
     del clients[client_id]
